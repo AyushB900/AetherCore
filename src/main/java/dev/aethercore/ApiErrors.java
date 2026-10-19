@@ -45,6 +45,13 @@ public class ApiErrors {
     if (e.getMostSpecificCause() instanceof java.sql.SQLException sql
         && "23503".equals(sql.getSQLState()))
       return problem(HttpStatus.NOT_FOUND, "ACCOUNT_NOT_FOUND", "Account not found");
+    if (e.getMostSpecificCause() instanceof java.sql.SQLException sql
+        && "23514".equals(sql.getSQLState())
+        && sql.getMessage().contains("available_nonnegative"))
+      return problem(
+          HttpStatus.UNPROCESSABLE_ENTITY,
+          "INSUFFICIENT_FUNDS",
+          "Insufficient available balance for this reservation");
     log.error("Database invariant rejected an operation", e);
     return problem(
         HttpStatus.CONFLICT, "INVARIANT_VIOLATION", "Operation violates a ledger constraint");

@@ -15,6 +15,7 @@ FROM eclipse-temurin:21-jre
 WORKDIR /app
 RUN groupadd --system aether && useradd --system --gid aether aether
 COPY --from=build /build/target/aethercore-0.1.0.jar app.jar
+COPY --chown=aether:aether site /app/site
 USER aether
 EXPOSE 8080
 ENTRYPOINT ["java","-jar","app.jar"]

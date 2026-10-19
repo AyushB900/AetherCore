@@ -8,6 +8,13 @@ After you run the project and can explain its transaction model, adapt these bul
 
 Do not claim institutional deployment, regulatory certification, real customer funds, or an unmeasured transactions-per-second number. Replace generic testing claims with results you personally reproduce. The demo prints elapsed time for a concurrent retry batch, not a representative production throughput measurement.
 
+Additional bullets you can use after reproducing the upgraded flows:
+
+- Implemented authorization holds, atomic full capture, and compensating reversals with database-protected accounting history and idempotent lifecycle operations.
+- Built an isolated public demo API using hashed, expiring visitor tokens and scoped account access; integrated a browser interface that distinguishes live Kafka acknowledgements from local simulations.
+
+See `docs/benchmarks/` for measured results when available. Discuss the actual workload and its limits rather than treating a small hot-account experiment as a production capacity claim.
+
 ## Five-minute interview walkthrough
 
 1. Run `docker compose up -d --build`, then `python3 scripts/demo.py` with the environment loaded.

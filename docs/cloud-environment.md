@@ -34,3 +34,9 @@ PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium npm test
 ```
 
 The multi-stage Dockerfile accepts optional BuildKit secret mounts `maven_settings` and `java_truststore` for network-restricted builders. These are transient build configuration, not files copied into the runtime image. Normal local builds do not need them. In this cloud machine, the builder also needs the host proxy name mapped to its resolved address and host networking. TLS and artifact verification remain enabled.
+
+## Upgraded live workspace
+
+The site now supports local-browser and real Java modes. To test Java from the static preview on port 3000, start Java with `DEMO_ENABLED=true DEMO_ORIGIN=http://127.0.0.1:3000`. Use `LIVE_BACKEND_URL=http://127.0.0.1:8080` for browser tests (adjust the port to the actual Java process). When the Java server itself serves `/demo/`, its runtime configuration auto-connects to the same origin.
+
+The latest backend suite contains 22 tests. The complete browser suite contains 30 checks with live mode configured; without `LIVE_BACKEND_URL`, eight live-only checks are explicitly skipped. The new deployment example and hosting prerequisites are in `live-deployment.md`. Public cloud resources have not been created.

@@ -6,6 +6,17 @@ AetherCore explores the failure modes behind moving money: two payments spending
 
 This is a runnable engineering portfolio project, not a licensed banking product or a connection to real payment rails. “Settlement” events describe internal postings; they do not prove external settlement.
 
+## Banking upgrades
+
+- **Live Java mode:** isolated, expiring visitor sessions with account ownership checks; no service API key in the browser. The website can connect to a deployed backend, or auto-connect when served by Java.
+- **Holds and captures:** show posted, held, and available balances; reserve/release funds or atomically capture a hold into a transfer.
+- **Compensating reversals:** preserve the original journal and link a new inverse transfer; prevent duplicate reversals.
+- **Audit dashboard:** inspect outbox events and distinguish queued events from actual Kafka acknowledgements in live mode. Browser mode labels local delivery as a simulation.
+- **Guided demo:** a short walkthrough of a payment, safe retry, reservation release, reversal, and audit evidence.
+- **Reproducible load test:** `scripts/load-test.py` reports actual p50/p95/p99 latency, throughput, retries, and reconciliation for a bounded workload.
+
+Public Java hosting is still a separate deployment step requiring your own server/account. See [live deployment](docs/live-deployment.md) and [payment lifecycle/API details](docs/payment-lifecycle.md). The published Pages site defaults to the browser engine until a backend is configured.
+
 ## Try the banking sandbox
 
 [Open the hands-on demo](https://ayushb900.github.io/AetherCore/demo/) or use **Try the banking demo** on the portfolio homepage.
@@ -26,7 +37,7 @@ The responsive [portfolio page](site/index.html) presents the architecture and e
 
 To publish, enable **Settings → Pages → Source: GitHub Actions** and run **Deploy project portfolio** once. Subsequent pushes to `main` that change `site/**` automatically deploy the update. Publishing depends on GitHub Pages being enabled.
 
-Browser checks (Node.js 22+): `cd site && npm ci && npx playwright install chromium && npm test`. There are 16 checks across desktop and mobile, covering account creation, funding, transfers, receipt retries, precision and overdraft errors, persistence, cross-tab concurrency, ledger search/export, reset, safe text rendering, isolated visitors, and the original simulation. The static site has no runtime package dependencies; Node is needed only for tests.
+Browser checks (Node.js 22+): `cd site && npm ci && npx playwright install chromium && npm test`. There are 30 checks across desktop and mobile when `LIVE_BACKEND_URL` points to a running demo-enabled Java service (22 local checks and 8 live checks), covering account creation, funding, transfers, receipt retries, precision and overdraft errors, persistence, cross-tab concurrency, ledger search/export, reset, safe text rendering, isolated visitors, and the original simulation. The static site has no runtime package dependencies; Node is needed only for tests.
 
 ## What makes it interesting
 
@@ -128,6 +139,9 @@ Errors use RFC 9457 problem details with a stable `code`: `INVALID_REQUEST`/`INV
 - [API contract](docs/openapi.yaml)
 - [Resume bullets and interview walkthrough](docs/resume.md)
 - [Reproduced validation results](docs/validation.md)
+- [Holds, captures, reversals, and public visitor API](docs/payment-lifecycle.md)
+- [Public live-mode deployment](docs/live-deployment.md)
+- [Reproducible performance experiment](docs/benchmarks/README.md)
 - [Cloud environment activation](docs/cloud-environment.md)
 
 The implementation deliberately chooses PostgreSQL as the financial source of truth. Redis cannot guarantee durable idempotency by itself, and a Kafka send inside a normal database transaction cannot make two separate systems atomic. The outbox closes that gap using durable intent and at-least-once delivery.

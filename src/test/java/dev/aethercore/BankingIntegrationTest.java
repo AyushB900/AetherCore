@@ -48,10 +48,13 @@ class BankingIntegrationTest {
     r.add("spring.data.redis.port", () -> redis.getMappedPort(6379));
     r.add("spring.kafka.bootstrap-servers", kafka::getBootstrapServers);
     r.add("app.api-key", () -> KEY);
+    r.add("app.demo-enabled", () -> true);
     r.add("app.outbox-delay-ms", () -> 600000);
   }
 
   @Autowired LedgerService ledger;
+  @Autowired PaymentService payments;
+  @Autowired VisitorService visitors;
   @Autowired JdbcTemplate db;
   @Autowired TransactionTemplate tx;
   @Autowired OutboxPublisher outbox;
@@ -354,5 +357,226 @@ class BankingIntegrationTest {
                     url("/api/v1/transfers"), new HttpEntity<>(move(a, b, -1), h), String.class)
                 .getStatusCode())
         .isEqualTo(HttpStatus.BAD_REQUEST);
+  }
+
+  @Test
+  void reservationsReduceAvailableFundsAndReleaseIsIdempotent() {
+    var a = account();
+    var b = account();
+    fund(a, 1000);
+    var hold = payments.reserve(key(), new HoldRequest(a.id(), 600, "Hotel authorization"));
+    assertThat(ledger.account(a.id()).balanceMinor()).isEqualTo(1000);
+    assertThat(ledger.account(a.id()).heldMinor()).isEqualTo(600);
+    assertThat(ledger.account(a.id()).availableMinor()).isEqualTo(400);
+    assertThatThrownBy(() -> ledger.move(key(), move(a, b, 500), false))
+        .isInstanceOf(BankingException.class);
+    assertThat(payments.release(hold.id()).status()).isEqualTo("RELEASED");
+    assertThat(payments.release(hold.id()).status()).isEqualTo("RELEASED");
+    assertThat(ledger.account(a.id()).availableMinor()).isEqualTo(1000);
+    invariant();
+  }
+
+  @Test
+  void captureConvertsReservationToExactlyOneBalancedPosting() {
+    var a = account();
+    var b = account();
+    fund(a, 1000);
+    var hold = payments.reserve(key(), new HoldRequest(a.id(), 600, "Card authorization"));
+    String k = key();
+    var first = payments.capture(k, hold.id(), b.id());
+    var replay = payments.capture(k, hold.id(), b.id());
+    assertThat(first.transfer().id()).isEqualTo(replay.transfer().id());
+    assertThat(replay.replayed()).isTrue();
+    assertThat(ledger.account(a.id()).balanceMinor()).isEqualTo(400);
+    assertThat(ledger.account(a.id()).heldMinor()).isZero();
+    assertThat(ledger.account(b.id()).balanceMinor()).isEqualTo(600);
+    assertThatThrownBy(() -> payments.release(hold.id())).isInstanceOf(BankingException.class);
+    assertThatThrownBy(() -> payments.capture(key(), hold.id(), b.id()))
+        .isInstanceOf(BankingException.class);
+    invariant();
+  }
+
+  @Test
+  void failedCaptureKeepsReservationAndLedgerUnchanged() {
+    var a = account();
+    fund(a, 1000);
+    var hold = payments.reserve(key(), new HoldRequest(a.id(), 600, "Authorization"));
+    long before = count("transfers");
+    assertThatThrownBy(() -> payments.capture(key(), hold.id(), a.id()))
+        .isInstanceOf(BankingException.class);
+    assertThat(payments.hold(hold.id()).status()).isEqualTo("HELD");
+    assertThat(ledger.account(a.id()).heldMinor()).isEqualTo(600);
+    assertThat(count("transfers")).isEqualTo(before);
+    invariant();
+  }
+
+  @Test
+  void concurrentReservationsCannotOversubscribeFunds() throws Exception {
+    var a = account();
+    fund(a, 1000);
+    var outcomes =
+        concurrently(
+            32,
+            i -> {
+              try {
+                payments.reserve(key(), new HoldRequest(a.id(), 100, "Concurrent reservation"));
+                return true;
+              } catch (org.springframework.dao.DataIntegrityViolationException e) {
+                return false;
+              }
+            });
+    assertThat(outcomes.stream().filter(Boolean::booleanValue).count()).isEqualTo(10);
+    assertThat(ledger.account(a.id()).heldMinor()).isEqualTo(1000);
+    assertThat(ledger.account(a.id()).availableMinor()).isZero();
+    invariant();
+  }
+
+  @Test
+  void concurrentReversalRetriesProduceOneCompensationAndPreserveOriginal() throws Exception {
+    var a = account();
+    var b = account();
+    fund(a, 1000);
+    var original = ledger.move(key(), move(a, b, 250), false).transfer();
+    String k = key();
+    var receipts = concurrently(16, i -> payments.reverse(k, original.id()));
+    assertThat(receipts.stream().filter(x -> !x.replayed()).count()).isOne();
+    assertThat(receipts.getFirst().transfer().reversalOf()).isEqualTo(original.id());
+    assertThat(ledger.transfer(original.id())).isEqualTo(original);
+    assertThat(ledger.account(a.id()).balanceMinor()).isEqualTo(1000);
+    assertThat(ledger.account(b.id()).balanceMinor()).isZero();
+    assertThatThrownBy(() -> payments.reverse(key(), original.id()))
+        .isInstanceOf(BankingException.class);
+    invariant();
+  }
+
+  @Test
+  void reversalsCannotSpendHeldOrAlreadySpentBeneficiaryFunds() {
+    var a = account();
+    var b = account();
+    fund(a, 1000);
+    var original = ledger.move(key(), move(a, b, 500), false).transfer();
+    payments.reserve(key(), new HoldRequest(b.id(), 400, "Reserved funds"));
+    assertThatThrownBy(() -> payments.reverse(key(), original.id()))
+        .isInstanceOf(BankingException.class);
+    assertThat(ledger.account(b.id()).balanceMinor()).isEqualTo(500);
+    invariant();
+  }
+
+  @Test
+  void visitorSessionsAreScopedExpiredAndNeverGrantServiceAccess() {
+    var first = visitors.start();
+    var second = visitors.start();
+    String a = first.get("token").toString(), b = second.get("token").toString();
+    @SuppressWarnings("unchecked")
+    var accountsA = (List<Account>) visitors.snapshot(a).get("accounts");
+    @SuppressWarnings("unchecked")
+    var accountsB = (List<Account>) visitors.snapshot(b).get("accounts");
+    UUID owned =
+        accountsA.stream().filter(x -> x.kind().equals("CUSTOMER")).findFirst().orElseThrow().id();
+    UUID foreign =
+        accountsB.stream().filter(x -> x.kind().equals("CUSTOMER")).findFirst().orElseThrow().id();
+    assertThatThrownBy(() -> visitors.move(a, key(), new MoveMoney(owned, foreign, 100, "USD")))
+        .isInstanceOf(BankingException.class);
+    assertThatThrownBy(() -> visitors.deposit(a, key(), new Deposit(foreign, 100, "USD")))
+        .isInstanceOf(BankingException.class);
+    assertThat(
+            db.queryForObject(
+                "SELECT token_hash FROM visitor_sessions WHERE id=?",
+                String.class,
+                first.get("sessionId")))
+        .isNotEqualTo(a);
+    var headers = new HttpHeaders();
+    headers.set("X-Demo-Token", a);
+    assertThat(
+            http.exchange(
+                    url("/api/v1/reconciliation"),
+                    HttpMethod.GET,
+                    new HttpEntity<>(headers),
+                    String.class)
+                .getStatusCode())
+        .isEqualTo(HttpStatus.UNAUTHORIZED);
+    db.update(
+        "UPDATE visitor_sessions SET expires_at=now()-interval '1 second' WHERE id=?",
+        first.get("sessionId"));
+    assertThatThrownBy(() -> visitors.snapshot(a))
+        .isInstanceOfSatisfying(
+            BankingException.class, e -> assertThat(e.code).isEqualTo("SESSION_EXPIRED"));
+    invariant();
+  }
+
+  @Test
+  void publicDemoApiSupportsOwnedTransfersAndRejectsUntrustedCorsOrigins() {
+    var created = http.postForEntity(url("/demo-api/sessions"), null, Map.class);
+    assertThat(created.getStatusCode()).isEqualTo(HttpStatus.OK);
+    String token = created.getBody().get("token").toString();
+    var headers = new HttpHeaders();
+    headers.set("X-Demo-Token", token);
+    assertThat(
+            http.exchange(
+                    url("/demo-api/workspace"),
+                    HttpMethod.GET,
+                    new HttpEntity<>(headers),
+                    Map.class)
+                .getStatusCode())
+        .isEqualTo(HttpStatus.OK);
+    assertThat(http.getForEntity(url("/demo-api/workspace"), String.class).getStatusCode())
+        .isEqualTo(HttpStatus.UNAUTHORIZED);
+    var cors = new HttpHeaders();
+    cors.setOrigin("https://evil.example");
+    cors.setAccessControlRequestMethod(HttpMethod.POST);
+    assertThat(
+            http.exchange(
+                    url("/demo-api/sessions"),
+                    HttpMethod.OPTIONS,
+                    new HttpEntity<>(cors),
+                    String.class)
+                .getStatusCode())
+        .isEqualTo(HttpStatus.FORBIDDEN);
+  }
+
+  @Test
+  void databaseRejectsMismatchedCompensationEvenWithBalancedEntries() {
+    var a = account();
+    var b = account();
+    fund(a, 1000);
+    var original = ledger.move(key(), move(a, b, 100), false).transfer();
+    long before = count("transfers");
+    UUID id = UUID.randomUUID();
+    assertThatThrownBy(
+            () ->
+                tx.executeWithoutResult(
+                    status -> {
+                      db.update(
+                          "INSERT INTO"
+                              + " transfers(id,idempotency_key,fingerprint,source_id,destination_id,currency,amount_minor,operation,reversal_of)"
+                              + " VALUES (?,?,?,?,?,'USD',99,'REVERSAL',?)",
+                          id,
+                          key(),
+                          "0".repeat(64),
+                          b.id(),
+                          a.id(),
+                          original.id());
+                      db.update(
+                          "INSERT INTO ledger_entries(transfer_id,account_id,side,amount_minor)"
+                              + " VALUES (?,?,'DEBIT',99),(?,?,'CREDIT',99)",
+                          id,
+                          b.id(),
+                          id,
+                          a.id());
+                    }))
+        .isInstanceOf(RuntimeException.class);
+    assertThat(count("transfers")).isEqualTo(before);
+    assertThat(ledger.account(b.id()).balanceMinor()).isEqualTo(100);
+    invariant();
+  }
+
+  @Test
+  void javaHostedWorkspaceAndRuntimeConfigurationArePublic() {
+    var page = http.getForEntity(url("/demo/"), String.class);
+    assertThat(page.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(page.getBody()).contains("runtime-config.js").contains("id=\"workspace\"");
+    var config = http.getForEntity(url("/demo/runtime-config.js"), String.class);
+    assertThat(config.getBody()).contains("same-origin");
+    assertThat(config.getHeaders().getCacheControl()).contains("no-store");
   }
 }

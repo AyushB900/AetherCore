@@ -20,7 +20,10 @@ import org.springframework.web.filter.OncePerRequestFilter;
 @Configuration
 public class SecurityConfig {
   @Bean
-  SecurityFilterChain security(HttpSecurity http, @Value("${app.api-key}") String key)
+  SecurityFilterChain security(
+      HttpSecurity http,
+      @Value("${app.api-key}") String key,
+      @Value("${app.demo-origin:https://ayushb900.github.io}") String origin)
       throws Exception {
     if (key.isBlank() || key.length() < 24)
       throw new IllegalArgumentException("AETHER_API_KEY must contain at least 24 characters");
@@ -44,10 +47,32 @@ public class SecurityConfig {
             chain.doFilter(request, response);
           }
         };
-    return http.csrf(c -> c.disable())
+    var cors = new org.springframework.web.cors.CorsConfiguration();
+    cors.setAllowedOrigins(List.of(origin));
+    cors.setAllowedMethods(List.of("GET", "POST", "OPTIONS"));
+    cors.setAllowedHeaders(List.of("Content-Type", "X-Demo-Token", "Idempotency-Key"));
+    cors.setMaxAge(3600L);
+    var source = new org.springframework.web.cors.UrlBasedCorsConfigurationSource();
+    source.registerCorsConfiguration("/demo-api/**", cors);
+    return http.cors(c -> c.configurationSource(source))
+        .csrf(c -> c.disable())
         .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
         .authorizeHttpRequests(
-            a -> a.requestMatchers("/actuator/health").permitAll().anyRequest().authenticated())
+            a ->
+                a.dispatcherTypeMatchers(jakarta.servlet.DispatcherType.ERROR)
+                    .permitAll()
+                    .requestMatchers(
+                        "/actuator/health",
+                        "/",
+                        "/index.html",
+                        "/styles.css",
+                        "/app.js",
+                        "/favicon.svg",
+                        "/demo/**",
+                        "/demo-api/**")
+                    .permitAll()
+                    .anyRequest()
+                    .authenticated())
         .exceptionHandling(e -> e.authenticationEntryPoint((req, res, ex) -> res.sendError(401)))
         .addFilterBefore(filter, UsernamePasswordAuthenticationFilter.class)
         .build();

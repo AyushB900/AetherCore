@@ -24,7 +24,13 @@ public final class Models {
       @NotNull @Pattern(regexp = "USD") String currency) {}
 
   public record Account(
-      UUID id, String ownerName, String currency, String kind, long balanceMinor) {}
+      UUID id,
+      String ownerName,
+      String currency,
+      String kind,
+      long balanceMinor,
+      long heldMinor,
+      long availableMinor) {}
 
   public record Transfer(
       UUID id,
@@ -33,6 +39,23 @@ public final class Models {
       long amountMinor,
       String currency,
       String operation,
+      OffsetDateTime createdAt,
+      UUID reversalOf) {}
+
+  public record HoldRequest(
+      @NotNull UUID accountId,
+      @Min(1) @Max(1_000_000_000_000L) long amountMinor,
+      @NotBlank @Size(max = 120) String description) {}
+
+  public record CaptureRequest(@NotNull UUID destinationId) {}
+
+  public record Hold(
+      UUID id,
+      UUID accountId,
+      long amountMinor,
+      String description,
+      String status,
+      UUID captureId,
       OffsetDateTime createdAt) {}
 
   public record Receipt(Transfer transfer, boolean replayed) {}

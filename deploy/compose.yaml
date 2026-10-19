@@ -1,0 +1,91 @@
+name: aethercore-public
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: aethercore
+      POSTGRES_USER: aethercore
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD}
+    volumes: [pg-data:/var/lib/postgresql/data]
+    healthcheck:
+      test: [CMD-SHELL, pg_isready -U aethercore -d aethercore]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+  redis:
+    image: redis:7.4-alpine
+    restart: unless-stopped
+    command: [redis-server, --maxmemory, 128mb, --maxmemory-policy, allkeys-lru]
+    healthcheck:
+      test: [CMD, redis-cli, ping]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+  kafka:
+    image: apache/kafka:3.9.1
+    restart: unless-stopped
+    environment:
+      CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qk
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://:29092,CONTROLLER://:29093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:29093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_HEAP_OPTS: -Xms256m -Xmx512m
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+      KAFKA_LOG_RETENTION_HOURS: 24
+      KAFKA_NUM_PARTITIONS: 3
+    volumes: [kafka-data:/var/lib/kafka/data]
+    healthcheck:
+      test:
+        [
+          CMD-SHELL,
+          /opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:29092 --list >/dev/null 2>&1,
+        ]
+      interval: 10s
+      timeout: 10s
+      retries: 30
+  app:
+    image: aethercore-public-app
+    build: { context: .. }
+    restart: unless-stopped
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/aethercore
+      DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD}
+      AETHER_API_KEY: ${AETHER_API_KEY:?Set AETHER_API_KEY}
+      REDIS_HOST: redis
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      FORWARD_HEADERS_STRATEGY: framework
+      DEMO_ENABLED: "true"
+      DEMO_ORIGIN: ${DEMO_ORIGIN:-https://ayushb900.github.io}
+      DEMO_MAX_SESSIONS: ${DEMO_MAX_SESSIONS:-1000}
+      JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=60
+    # Only an SSH/local administrator can access the internal service API on this port.
+    ports: [127.0.0.1:8080:8080]
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      kafka: { condition: service_healthy }
+  gateway:
+    image: caddy:2.10-alpine
+    restart: unless-stopped
+    environment:
+      AETHER_DOMAIN: ${AETHER_DOMAIN:?Set a DNS hostname you control}
+    ports: [80:80, 443:443]
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on: [app]
+volumes:
+  pg-data:
+  kafka-data:
+  caddy-data:
+  caddy-config:

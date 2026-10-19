@@ -27,4 +27,28 @@ jobs:
           cache-dependency-path: site/package-lock.json
       - run: npm ci
       - run: npx playwright install --with-deps chromium
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+      - name: Build the live demo engine
+        working-directory: .
+        run: ./mvnw -B -DskipTests package
+      - name: Start backing services and isolated visitor API
+        working-directory: .
+        env:
+          DB_PASSWORD: ci-only-disposable-database
+          AETHER_API_KEY: ci-only-disposable-service-key-123456789
+        run: |
+          docker compose up -d --wait postgres redis kafka
+          DEMO_ENABLED=true DEMO_ORIGIN=http://127.0.0.1:3000 nohup java -jar target/aethercore-0.1.0.jar > /tmp/aether-live.log 2>&1 &
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent http://localhost:8080/actuator/health; then exit 0; fi
+            sleep 1
+          done
+          tail -100 /tmp/aether-live.log
+          exit 1
       - run: npm test
+        env:
+          LIVE_BACKEND_URL: http://127.0.0.1:8080

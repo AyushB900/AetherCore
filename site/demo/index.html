@@ -32,6 +32,12 @@
         <button class="nav-item" data-view="ledger">
           <span aria-hidden="true">≡</span> Ledger
         </button>
+        <button class="nav-item" data-view="holds">
+          <span aria-hidden="true">◷</span> Holds
+        </button>
+        <button class="nav-item" data-view="audit">
+          <span aria-hidden="true">⌁</span> Audit events
+        </button>
         <button class="nav-item" data-view="lab">
           <span aria-hidden="true">⌘</span> Reliability lab
           <span class="new-tag">TRY IT</span>
@@ -61,6 +67,15 @@
           <i></i> Browser sandbox <span>ⓘ</span>
         </button>
       </header>
+      <div class="upgrade-toolbar">
+        <button class="button subtle" id="guide-open">
+          Two-minute guided demo →</button
+        ><button class="button subtle" id="connect-open">
+          Connect live backend ↗</button
+        ><span id="connection-label"
+          >Browser mode · data stays on this device</span
+        >
+      </div>
       <div class="demo-banner">
         <span class="banner-icon">i</span>
         <p>
@@ -220,6 +235,8 @@
                 <option value="ALL">All movements</option>
                 <option value="TRANSFER">Transfers</option>
                 <option value="DEPOSIT">Demo deposits</option>
+                <option value="CAPTURE">Hold captures</option>
+                <option value="REVERSAL">Reversals</option>
               </select>
             </div>
             <div class="activity-panel" id="all-activity"></div>
@@ -316,6 +333,85 @@
                 >Read the engineering decisions ↗</a
               >
             </div>
+          </section>
+
+          <section
+            class="view"
+            id="view-holds"
+            hidden
+            aria-labelledby="holds-title"
+          >
+            <div class="page-heading">
+              <div>
+                <div class="eyebrow">RESERVE NOW. POST LATER.</div>
+                <h1 id="holds-title">Payment holds.</h1>
+                <p>
+                  Holds reduce available funds without changing the posted
+                  balance. Capture creates a transfer; release restores
+                  availability.
+                </p>
+              </div>
+              <button class="button primary" id="hold-open">
+                Create a hold ＋
+              </button>
+            </div>
+            <div id="hold-summary" class="ledger-summary"></div>
+            <div id="holds-list" class="holds-list"></div>
+          </section>
+          <section
+            class="view"
+            id="view-audit"
+            hidden
+            aria-labelledby="audit-title"
+          >
+            <div class="page-heading">
+              <div>
+                <div class="eyebrow">FROM POSTING TO PUBLICATION</div>
+                <h1 id="audit-title">Follow the audit trail.</h1>
+                <p id="audit-explainer"></p>
+              </div>
+              <button class="button subtle" id="audit-refresh">
+                Refresh events ↻
+              </button>
+            </div>
+            <div class="ledger-summary" id="audit-summary"></div>
+            <div class="lab-mode" id="local-delivery-controls">
+              <span>LOCAL SIMULATION</span>
+              <p>
+                Pause delivery, make a transfer, then resume. The event stays
+                queued while your ledger remains balanced. This does not control
+                a real Kafka broker.
+              </p>
+              <button class="button subtle" id="delivery-toggle">
+                Pause local delivery
+              </button>
+            </div>
+            <div class="activity-panel" id="audit-events"></div>
+          </section>
+          <section
+            id="performance-panel"
+            class="performance-panel"
+            hidden
+            aria-labelledby="performance-title"
+          >
+            <div class="eyebrow">MEASURED, NOT ESTIMATED</div>
+            <h2 id="performance-title">Development load-test results.</h2>
+            <p>
+              Small hot-account HTTP runs on a shared development host. These
+              figures are reproducible observations, not production capacity or
+              latency guarantees. Each run also checks reconciliation and a
+              32-request retry batch.
+            </p>
+            <div id="performance-results">
+              Results are available in the repository’s benchmark reports.
+            </div>
+            <a
+              class="inline-link"
+              href="https://github.com/AyushB900/AetherCore/tree/main/docs/benchmarks"
+              target="_blank"
+              rel="noopener noreferrer"
+              >Workload, hardware context, and raw reports ↗</a
+            >
           </section>
           <footer class="workspace-footer">
             <span>AetherCore / Developer sandbox</span
@@ -484,6 +580,134 @@
         </button>
       </div>
     </dialog>
+
+    <dialog id="hold-dialog" aria-labelledby="hold-title">
+      <form id="hold-form">
+        <div class="dialog-header">
+          <span class="eyebrow">RESERVE AVAILABLE FUNDS</span
+          ><button type="button" class="close" data-close aria-label="Close">
+            ×
+          </button>
+        </div>
+        <h2 id="hold-title">Create a payment hold.</h2>
+        <p>
+          A reservation is not a debit. It reduces what can be spent until
+          capture or release.
+        </p>
+        <label for="hold-account">Account</label
+        ><select id="hold-account" name="accountId" required></select
+        ><label
+          >Amount in USD
+          <div class="amount-input">
+            <span>$</span
+            ><input
+              name="amount"
+              inputmode="decimal"
+              required
+              placeholder="25.00"
+            /></div></label
+        ><label
+          >Description<input
+            name="description"
+            maxlength="120"
+            required
+            placeholder="e.g. Hotel authorization"
+        /></label>
+        <div class="form-error" role="alert" hidden></div>
+        <button type="submit" class="button primary full">
+          Reserve funds →
+        </button>
+      </form>
+    </dialog>
+    <dialog id="capture-dialog" aria-labelledby="capture-title">
+      <form id="capture-form">
+        <div class="dialog-header">
+          <span class="eyebrow">SETTLE THE RESERVATION</span
+          ><button type="button" class="close" data-close aria-label="Close">
+            ×
+          </button>
+        </div>
+        <h2 id="capture-title">Capture a hold.</h2>
+        <p id="capture-description"></p>
+        <label for="capture-destination">Destination account</label
+        ><select
+          id="capture-destination"
+          name="destinationId"
+          required
+        ></select>
+        <div class="form-error" role="alert" hidden></div>
+        <button type="submit" class="button primary full">
+          Capture and transfer →
+        </button>
+      </form>
+    </dialog>
+    <dialog id="reversal-dialog" aria-labelledby="reversal-title">
+      <div class="dialog-header">
+        <span class="eyebrow">COMPENSATE. NEVER ERASE.</span
+        ><button class="close" data-close aria-label="Close">×</button>
+      </div>
+      <h2 id="reversal-title">Reverse this transfer?</h2>
+      <p id="reversal-description"></p>
+      <p>
+        The original journal stays unchanged. A new transfer moves the full
+        amount back, provided it is still available in the recipient account.
+      </p>
+      <div class="form-error" id="reversal-error" role="alert" hidden></div>
+      <button class="button primary full" id="reversal-confirm">
+        Post compensating transfer →
+      </button>
+    </dialog>
+    <dialog id="connect-dialog" aria-labelledby="connect-title">
+      <form id="connect-form">
+        <div class="dialog-header">
+          <span class="eyebrow">CHOOSE YOUR ENGINE</span
+          ><button type="button" class="close" data-close aria-label="Close">
+            ×
+          </button>
+        </div>
+        <h2 id="connect-title">Connect the Java engine.</h2>
+        <p>
+          Enter your deployed AetherCore backend URL. It must have public demo
+          sessions enabled and allow this website’s origin. No service API key
+          belongs in this browser.
+        </p>
+        <label
+          >Backend URL<input
+            name="url"
+            type="url"
+            required
+            placeholder="https://bank.example.com"
+            autocomplete="url"
+        /></label>
+        <div class="form-error" role="alert" hidden></div>
+        <button type="submit" class="button primary full">
+          Connect with an isolated session →</button
+        ><button type="button" class="button subtle full" id="use-browser">
+          Use browser sandbox instead
+        </button>
+        <p class="dialog-note">
+          A separate live workspace is created. Your local data stays intact.
+          Session tokens expire after 24 hours.
+        </p>
+      </form>
+    </dialog>
+    <dialog id="guide-dialog" aria-labelledby="guide-title">
+      <div class="dialog-header">
+        <span class="eyebrow" id="guide-progress">GUIDED DEMO</span
+        ><button class="close" data-close aria-label="Close">×</button>
+      </div>
+      <h2 id="guide-title">Banking, in two minutes.</h2>
+      <p id="guide-copy">
+        Explore a payment, a safe retry, a hold, and a reversal using dedicated
+        accounts. Your other accounts stay untouched.
+      </p>
+      <div id="guide-evidence"></div>
+      <div class="form-error" id="guide-error" role="alert" hidden></div>
+      <button class="button primary full" id="guide-next">
+        Start guided demo →
+      </button>
+    </dialog>
+    <script src="runtime-config.js"></script>
     <script type="module" src="app.js"></script>
   </body>
 </html>

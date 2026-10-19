@@ -1,0 +1,15 @@
+{$AETHER_DOMAIN} {
+	encode zstd gzip
+	header {
+		X-Content-Type-Options nosniff
+		X-Frame-Options DENY
+		Referrer-Policy strict-origin-when-cross-origin
+	}
+	@internal path /api/* /actuator/metrics* /actuator/info
+	handle @internal {
+		respond "Not found" 404
+	}
+	handle {
+		reverse_proxy app:8080
+	}
+}

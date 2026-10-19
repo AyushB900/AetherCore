@@ -75,7 +75,8 @@ public class BankingController {
           SELECT t.id,count(e.id) AS n,coalesce(sum(CASE WHEN e.side='CREDIT' THEN e.amount_minor::numeric ELSE -e.amount_minor::numeric END),0) AS net
           FROM transfers t LEFT JOIN ledger_entries e ON e.transfer_id=t.id GROUP BY t.id
         )
-        SELECT (SELECT count(*) FROM projected WHERE balance_minor<>actual) AS drifted_accounts,
+        SELECT (SELECT count(*) FROM accounts a WHERE a.held_minor<>(SELECT coalesce(sum(h.amount_minor),0) FROM payment_holds h WHERE h.account_id=a.id AND h.status='HELD')) AS drifted_holds,
+                   (SELECT count(*) FROM projected WHERE balance_minor<>actual) AS drifted_accounts,
                (SELECT count(*) FROM journals WHERE n<>2 OR net<>0) AS unbalanced_transfers,
                (SELECT coalesce(sum(balance_minor::numeric),0) FROM accounts) AS net_balance_minor,
                (SELECT count(*) FROM transfers) AS transfer_count,

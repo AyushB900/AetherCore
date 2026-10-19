@@ -36,9 +36,13 @@ services:
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
       KAFKA_NUM_PARTITIONS: 3
-      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true'
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
     healthcheck:
-      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list >/dev/null 2>&1"]
+      test:
+        [
+          "CMD-SHELL",
+          "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list >/dev/null 2>&1",
+        ]
       interval: 10s
       timeout: 10s
       retries: 30
@@ -48,12 +52,15 @@ services:
       DB_URL: jdbc:postgresql://postgres:5432/aethercore
       DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env}
       AETHER_API_KEY: ${AETHER_API_KEY:?Set AETHER_API_KEY in .env}
+      DEMO_ENABLED: ${DEMO_ENABLED:-false}
+      DEMO_ORIGIN: ${DEMO_ORIGIN:-https://ayushb900.github.io}
+      DEMO_MAX_SESSIONS: ${DEMO_MAX_SESSIONS:-1000}
       REDIS_HOST: redis
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
     ports: ["127.0.0.1:8080:8080"]
     depends_on:
-      postgres: {condition: service_healthy}
-      redis: {condition: service_healthy}
-      kafka: {condition: service_healthy}
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      kafka: { condition: service_healthy }
 volumes:
   postgres-data:

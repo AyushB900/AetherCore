@@ -21,11 +21,15 @@ function empty() {
         name: "External clearing",
         kind: "CLEARING",
         balanceMinor: 0,
+        heldMinor: 0,
       },
     ],
     transfers: [],
     entries: [],
     keys: {},
+    holds: [],
+    events: [],
+    deliveryPaused: false,
   };
 }
 function validAmount(amount) {
@@ -49,6 +53,7 @@ function newAccount(state, name) {
     name,
     kind: "CUSTOMER",
     balanceMinor: 0,
+    heldMinor: 0,
   };
   state.accounts.push(account);
   return structuredClone(account);
@@ -57,13 +62,16 @@ function post(state, key, request) {
   validAmount(request.amountMinor);
   if (typeof key !== "string" || !/^[A-Za-z0-9._:-]{1,128}$/.test(key))
     fail("INVALID_KEY", "A valid request key is required.");
-  const fingerprint = JSON.stringify([
+  const parts = [
     request.operation,
     request.sourceId,
     request.destinationId,
     request.amountMinor,
     "USD",
-  ]);
+  ];
+  if (request.reversalOf) parts.push("reversal:" + request.reversalOf);
+  if (request.holdId) parts.push("hold:" + request.holdId);
+  const fingerprint = JSON.stringify(parts);
   const existing = Object.hasOwn(state.keys, key) ? state.keys[key] : null;
   if (existing) {
     if (existing.fingerprint !== fingerprint)
@@ -95,13 +103,18 @@ function post(state, key, request) {
   if (source.id === destination.id)
     fail("SAME_ACCOUNT", "Choose two different accounts.");
   if (
-    !["TRANSFER", "DEPOSIT"].includes(request.operation) ||
+    !["TRANSFER", "DEPOSIT", "CAPTURE", "REVERSAL"].includes(
+      request.operation,
+    ) ||
     destination.kind !== "CUSTOMER" ||
-    (request.operation === "TRANSFER" && source.kind !== "CUSTOMER") ||
+    (request.operation !== "DEPOSIT" && source.kind !== "CUSTOMER") ||
     (request.operation === "DEPOSIT" && source.id !== CLEARING)
   )
     fail("ACCOUNT_KIND", "This movement is not supported.");
-  if (source.kind === "CUSTOMER" && source.balanceMinor < request.amountMinor)
+  if (
+    source.kind === "CUSTOMER" &&
+    source.balanceMinor - (source.heldMinor || 0) < request.amountMinor
+  )
     fail(
       "INSUFFICIENT_FUNDS",
       "There isn’t enough money in the source account. Add demo funds or enter a smaller amount.",
@@ -115,11 +128,19 @@ function post(state, key, request) {
     amountMinor: request.amountMinor,
     currency: "USD",
     operation: request.operation,
+    reversalOf: request.reversalOf || null,
     createdAt: new Date().toISOString(),
   };
   source.balanceMinor -= request.amountMinor;
   destination.balanceMinor += request.amountMinor;
   state.transfers.push(transfer);
+  state.events.push({
+    id: crypto.randomUUID(),
+    transferId: transfer.id,
+    createdAt: transfer.createdAt,
+    publishedAt: state.deliveryPaused ? null : transfer.createdAt,
+    local: true,
+  });
   for (const [account, side] of [
     [source, "DEBIT"],
     [destination, "CREDIT"],
@@ -204,12 +225,24 @@ export function reconcile(state) {
     (sum, a) => sum + a.balanceMinor,
     0,
   );
+  const reserved = new Map(state.accounts.map((a) => [a.id, 0]));
+  for (const hold of state.holds || [])
+    if (hold.status === "HELD")
+      reserved.set(
+        hold.accountId,
+        (reserved.get(hold.accountId) || 0) + hold.amountMinor,
+      );
+  const driftedHolds = state.accounts.filter(
+    (a) => (a.heldMinor || 0) !== reserved.get(a.id),
+  ).length;
   return {
+    driftedHolds,
     driftedAccounts,
     unbalancedTransfers,
     netBalanceMinor,
     balanced:
       driftedAccounts === 0 &&
+      driftedHolds === 0 &&
       unbalancedTransfers === 0 &&
       netBalanceMinor === 0,
   };
@@ -249,6 +282,15 @@ export class DemoBank {
       request.onsuccess = () => {
         try {
           const state = request.result || seed();
+          state.holds ||= [];
+          state.events ||= state.transfers.map((t) => ({
+            id: crypto.randomUUID(),
+            transferId: t.id,
+            createdAt: t.createdAt,
+            publishedAt: t.createdAt,
+            local: true,
+          }));
+          for (const a of state.accounts) a.heldMinor ||= 0;
           result = mutator(state);
           store.put(state, "bank");
         } catch (cause) {
@@ -290,6 +332,130 @@ export class DemoBank {
       }),
     );
   }
+  reserve(key, request) {
+    return this.transact((state) => {
+      validAmount(request.amountMinor);
+      if (!/^[A-Za-z0-9._:-]{1,128}$/.test(key))
+        fail("INVALID_KEY", "A request key is required.");
+      if (
+        !String(request.description || "").trim() ||
+        request.description.length > 120
+      )
+        fail(
+          "INVALID_DESCRIPTION",
+          "Enter a description of up to 120 characters.",
+        );
+      const existing = state.holds.find((h) => h.requestKey === key);
+      if (existing) {
+        if (
+          existing.accountId !== request.accountId ||
+          existing.amountMinor !== request.amountMinor ||
+          existing.description !== request.description
+        )
+          fail("IDEMPOTENCY_CONFLICT", "This key belongs to a different hold.");
+        return structuredClone(existing);
+      }
+      if (state.holds.length >= 1000)
+        fail("DEMO_LIMIT", "Reset your workspace before adding more holds.");
+      const account = state.accounts.find(
+        (a) => a.id === request.accountId && a.kind === "CUSTOMER",
+      );
+      if (!account) fail("NOT_FOUND", "Account not found.");
+      if (account.balanceMinor - account.heldMinor < request.amountMinor)
+        fail(
+          "INSUFFICIENT_FUNDS",
+          "There is not enough available balance for this hold.",
+        );
+      const hold = {
+        id: crypto.randomUUID(),
+        requestKey: key,
+        accountId: account.id,
+        amountMinor: request.amountMinor,
+        description: request.description,
+        status: "HELD",
+        captureId: null,
+        createdAt: new Date().toISOString(),
+      };
+      account.heldMinor += hold.amountMinor;
+      state.holds.push(hold);
+      return structuredClone(hold);
+    });
+  }
+  release(id) {
+    return this.transact((state) => {
+      const hold = state.holds.find((h) => h.id === id);
+      if (!hold) fail("NOT_FOUND", "Hold not found.");
+      if (hold.status === "CAPTURED")
+        fail(
+          "HOLD_CAPTURED",
+          "Captured holds cannot be released. Reverse the transfer instead.",
+        );
+      if (hold.status === "HELD") {
+        state.accounts.find((a) => a.id === hold.accountId).heldMinor -=
+          hold.amountMinor;
+        hold.status = "RELEASED";
+      }
+      return structuredClone(hold);
+    });
+  }
+  capture(key, id, destinationId) {
+    return this.transact((state) => {
+      const hold = state.holds.find((h) => h.id === id);
+      if (!hold) fail("NOT_FOUND", "Hold not found.");
+      if (hold.status === "RELEASED")
+        fail("HOLD_RELEASED", "This hold has already been released.");
+      if (hold.status === "CAPTURED") {
+        const transfer = state.transfers.find((t) => t.id === hold.captureId);
+        if (hold.captureKey !== key || transfer.destinationId !== destinationId)
+          fail("HOLD_CAPTURED", "This hold was already captured.");
+        return { transfer: structuredClone(transfer), replayed: true };
+      }
+      state.accounts.find((a) => a.id === hold.accountId).heldMinor -=
+        hold.amountMinor;
+      const receipt = post(state, key, {
+        operation: "CAPTURE",
+        sourceId: hold.accountId,
+        destinationId,
+        amountMinor: hold.amountMinor,
+        holdId: hold.id,
+      });
+      hold.status = "CAPTURED";
+      hold.captureId = receipt.transfer.id;
+      hold.captureKey = key;
+      return receipt;
+    });
+  }
+  reverse(key, id) {
+    return this.transact((state) => {
+      const original = state.transfers.find((t) => t.id === id);
+      if (!original) fail("NOT_FOUND", "Transfer not found.");
+      if (!["TRANSFER", "CAPTURE"].includes(original.operation))
+        fail("NOT_REVERSIBLE", "Only transfers and captures may be reversed.");
+      const existing = state.transfers.find((t) => t.reversalOf === id);
+      if (existing && state.keys[key]?.id !== existing.id)
+        fail("ALREADY_REVERSED", "This transfer already has a reversal.");
+      return post(state, key, {
+        operation: "REVERSAL",
+        sourceId: original.destinationId,
+        destinationId: original.sourceId,
+        amountMinor: original.amountMinor,
+        reversalOf: id,
+      });
+    });
+  }
+  async replay(id) {
+    const state = await this.snapshot();
+    return replayReceipt(this, state, id);
+  }
+  setDeliveryPaused(paused) {
+    return this.transact((state) => {
+      state.deliveryPaused = paused;
+      if (!paused)
+        for (const event of state.events)
+          if (!event.publishedAt) event.publishedAt = new Date().toISOString();
+      return paused;
+    });
+  }
   reset() {
     return this.transact((state) => {
       const next = seed();
@@ -298,4 +464,20 @@ export class DemoBank {
       return structuredClone(state);
     });
   }
+}
+
+export async function replayReceipt(bank, state, id) {
+  const transfer = state.transfers.find((t) => t.id === id);
+  const key = Object.keys(state.keys).find((k) => state.keys[k].id === id);
+  if (!transfer || !key) fail("NOT_FOUND", "This receipt is not available.");
+  if (transfer.operation === "REVERSAL")
+    return bank.reverse(key, transfer.reversalOf);
+  if (transfer.operation === "CAPTURE") {
+    const hold = state.holds.find((h) => h.captureId === id);
+    return bank.capture(key, hold.id, transfer.destinationId);
+  }
+  return bank[transfer.operation === "DEPOSIT" ? "deposit" : "transfer"](
+    key,
+    transfer,
+  );
 }

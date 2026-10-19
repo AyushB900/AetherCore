@@ -1,6 +1,9 @@
 spring:
   application:
     name: aethercore
+  web:
+    resources:
+      static-locations: ${STATIC_LOCATIONS:file:./site/}
   datasource:
     url: ${DB_URL:jdbc:postgresql://localhost:5432/aethercore}
     username: ${DB_USER:aethercore}
@@ -26,6 +29,7 @@ spring:
         request.timeout.ms: 5000
         max.block.ms: 5000
 server:
+  forward-headers-strategy: ${FORWARD_HEADERS_STRATEGY:none}
   port: ${PORT:8080}
   error:
     include-message: never
@@ -46,3 +50,6 @@ app:
   outbox-enabled: ${OUTBOX_ENABLED:true}
   outbox-delay-ms: ${OUTBOX_DELAY_MS:1000}
   settlement-topic: aethercore.settlements.v1
+  demo-enabled: ${DEMO_ENABLED:false}
+  demo-origin: ${DEMO_ORIGIN:https://ayushb900.github.io}
+  demo-max-sessions: ${DEMO_MAX_SESSIONS:1000}

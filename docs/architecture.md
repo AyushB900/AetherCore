@@ -9,6 +9,7 @@ flowchart LR
   PG --- Journal[Immutable debit / credit journal]
   PG --- Keys[Durable request keys and fingerprints]
   PG --- Outbox[Transactional outbox]
+  PG --- Holds[Reservation lifecycle]
   Publisher[Outbox publisher] -->|locked pending batch| PG
   Publisher -->|acks=all| Kafka[Kafka audit topic]
   Kafka --> Audit[Downstream consumers deduplicate eventId]
@@ -63,3 +64,9 @@ The API key authenticates a trusted internal service and grants full demo access
 `/actuator/health` checks application/database availability. Optional Redis failure is excluded from health. Kafka delivery is monitored through `pending_events`, not health; a healthy app can have a stalled audit pipeline. `/api/v1/reconciliation` is intentionally a full scan for the small demo dataset and would require an incremental/restricted workflow at institutional scale.
 
 Recovery requires backing up the PostgreSQL journal, transfer keys, and outbox together; recreating Redis is safe. Real operations require a tested backup/PITR policy, reconciliation against external rails, and alerting on stale outbox rows and nonzero drift. Journal corrections should be compensating transfers with new idempotency keys; no deletion endpoint exists.
+
+## Visitor sessions and payment lifecycle
+
+See [payment lifecycle](payment-lifecycle.md) for reservations, full captures, and compensating reversals, and [live deployment](live-deployment.md) for public hosting. Visitor requests are scoped by a hashed token and serialize through a session row before entering the account transaction. They do not gain the internal service key or another visitor's clearing account. The public session budget deliberately bounds anonymous allocations and is not a production admission-control system.
+
+Balances now distinguish posted, held, and available funds. Normal transfers and reversals cannot spend held funds. PostgreSQL validates both balanced postings and exact reversal relationships. The browser retains a request key across an uncertain live response and never silently switches a failed Java payment into a local operation.
