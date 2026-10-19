@@ -6,11 +6,27 @@ AetherCore explores the failure modes behind moving money: two payments spending
 
 This is a runnable engineering portfolio project, not a licensed banking product or a connection to real payment rails. “Settlement” events describe internal postings; they do not prove external settlement.
 
+## Try the banking sandbox
+
+[Open the hands-on demo](https://ayushb900.github.io/AetherCore/demo/) or use **Try the banking demo** on the portfolio homepage.
+
+The workspace starts with three accounts and $25,000 in simulated funds. Visitors can:
+
+- Open accounts, add demo deposits, and transfer funds with cent-accurate amounts.
+- Inspect debit/credit receipts and retry a request without charging again.
+- Search the journal, download its JSON export, and check reconciliation.
+- Run concurrent retry and overdraft experiments using dedicated test accounts.
+- Reload to keep their workspace, or explicitly reset to the starter data.
+
+**The Pages demo uses a local IndexedDB engine; it does not call the Java backend.** Each browser has its own data. IndexedDB transactions serialize writes across tabs; no service API key is shipped to visitors. No signup or bank details are needed. Data is fictional, limited to 20 customer accounts and 1,000 postings, and may be removed by clearing site storage. The real Java/PostgreSQL/Redis/Kafka implementation remains available below and has its own integration tests.
+
 ## Project portfolio
 
-The responsive [portfolio page](site/index.html) includes the architecture, engineering decisions, a clearly labeled interactive retry simulation, and repository links. Preview it locally with `python3 -m http.server 3000 --directory site`. To publish it, enable **Settings → Pages → Source: GitHub Actions** in the repository and run the included **Deploy project portfolio** workflow. Publication depends on GitHub Pages being enabled; the source alone does not mean the site is live.
+The responsive [portfolio page](site/index.html) presents the architecture and engineering decisions, and links to the [working browser workspace](site/demo/index.html). The original illustrative retry animation is also retained. Preview everything with `python3 -m http.server 3000 --directory site`.
 
-Portfolio browser checks (Node.js 22+): `cd site && npm ci && npx playwright install chromium && npm test`. They verify desktop/mobile layout, the 32-request simulation, reset behavior, and copy control. The static page has no runtime package dependencies; Node is needed only for tests.
+To publish, enable **Settings → Pages → Source: GitHub Actions** and run **Deploy project portfolio** once. Subsequent pushes to `main` that change `site/**` automatically deploy the update. Publishing depends on GitHub Pages being enabled.
+
+Browser checks (Node.js 22+): `cd site && npm ci && npx playwright install chromium && npm test`. There are 16 checks across desktop and mobile, covering account creation, funding, transfers, receipt retries, precision and overdraft errors, persistence, cross-tab concurrency, ledger search/export, reset, safe text rendering, isolated visitors, and the original simulation. The static site has no runtime package dependencies; Node is needed only for tests.
 
 ## What makes it interesting
 

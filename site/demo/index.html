@@ -1,0 +1,489 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta
+      name="description"
+      content="Try AetherCore: create demo bank accounts, transfer simulated funds, inspect double-entry journals, and test safe retries."
+    />
+    <meta name="theme-color" content="#143d36" />
+    <title>Banking sandbox · AetherCore</title>
+    <link rel="icon" href="../favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="demo.css" />
+  </head>
+  <body>
+    <a class="skip" href="#main">Skip to workspace</a>
+    <aside class="sidebar">
+      <a class="brand" href="../"><span>A</span>AetherCore.</a>
+      <div class="workspace-label">DEVELOPER WORKSPACE</div>
+      <nav aria-label="Workspace navigation">
+        <button
+          class="nav-item active"
+          data-view="overview"
+          aria-current="page"
+        >
+          <span aria-hidden="true">◫</span> Overview
+        </button>
+        <button class="nav-item" data-view="accounts">
+          <span aria-hidden="true">▤</span> Accounts
+          <span class="nav-count" id="nav-account-count">3</span>
+        </button>
+        <button class="nav-item" data-view="ledger">
+          <span aria-hidden="true">≡</span> Ledger
+        </button>
+        <button class="nav-item" data-view="lab">
+          <span aria-hidden="true">⌘</span> Reliability lab
+          <span class="new-tag">TRY IT</span>
+        </button>
+      </nav>
+      <div class="sidebar-bottom">
+        <div class="sandbox-label"><i></i> SAFE TO EXPLORE</div>
+        <p>
+          Demo money. Real interactions.<br />Your workspace, on this device.
+        </p>
+        <a href="../">About the project <span>↗</span></a
+        ><a
+          href="https://github.com/AyushB900/AetherCore"
+          target="_blank"
+          rel="noopener noreferrer"
+          >View source <span>↗</span></a
+        ><button id="reset-open">Reset workspace <span>↻</span></button>
+      </div>
+    </aside>
+    <div class="app-shell">
+      <header class="topbar">
+        <div>
+          <span class="breadcrumb">Workspace</span><span class="slash">/</span
+          ><span id="breadcrumb-current">Overview</span>
+        </div>
+        <button class="engine-badge" id="about-open">
+          <i></i> Browser sandbox <span>ⓘ</span>
+        </button>
+      </header>
+      <div class="demo-banner">
+        <span class="banner-icon">i</span>
+        <p>
+          <strong>Try it. Nothing here is real money.</strong> Changes are saved
+          in this browser only. The Java backend is available separately in the
+          repository.
+        </p>
+        <button id="banner-about">How it works <span>↗</span></button>
+      </div>
+      <main id="main" tabindex="-1">
+        <div id="loading" role="status">Preparing your workspace…</div>
+        <div id="fatal" hidden role="alert">
+          <h1>We couldn’t open your workspace.</h1>
+          <p id="fatal-message"></p>
+          <button class="primary" onclick="location.reload()">Try again</button>
+        </div>
+        <div id="workspace" hidden>
+          <section
+            class="view"
+            id="view-overview"
+            aria-labelledby="overview-title"
+          >
+            <div class="page-heading">
+              <div>
+                <div class="eyebrow">YOUR MONEY, ACCOUNTED FOR</div>
+                <h1 id="overview-title">A clearer view of every move.</h1>
+                <p>
+                  Your own banking sandbox. Explore the accounts, move some
+                  money, and see what happens under the hood.
+                </p>
+              </div>
+              <button class="button subtle" data-action="fund">
+                ＋ Add demo funds
+              </button>
+            </div>
+            <div class="overview-grid">
+              <article class="balance-card">
+                <div class="balance-label">
+                  TOTAL CUSTOMER BALANCE <span>USD</span>
+                </div>
+                <div class="balance-value" id="total-balance">$0.00</div>
+                <div class="balance-context">
+                  <span class="balance-indicator"></span> Across
+                  <span id="balance-accounts">0</span> accounts
+                  <span class="demo-pill">DEMO FUNDS</span>
+                </div>
+                <div class="balance-actions">
+                  <button class="button lime" data-action="transfer">
+                    Make a transfer <span>↗</span></button
+                  ><button class="button ghost" data-action="account">
+                    New account <span>＋</span>
+                  </button>
+                </div>
+                <span class="balance-watermark" aria-hidden="true">A</span>
+              </article>
+              <div class="health-card">
+                <div class="card-kicker">
+                  LEDGER HEALTH <span class="live-dot"></span>
+                </div>
+                <div class="health-title">
+                  <span class="check-icon" id="health-icon">✓</span>
+                  <h2 id="health-title">Everything balances.</h2>
+                </div>
+                <p>
+                  Every movement has an equal debit and credit. Nothing created.
+                  Nothing lost.
+                </p>
+                <div class="health-stat">
+                  <span>Reconciliation drift</span
+                  ><strong id="drift-amount">$0.00</strong>
+                </div>
+                <div class="health-stat">
+                  <span>Unbalanced transfers</span
+                  ><strong id="unbalanced-count">0</strong>
+                </div>
+                <button class="inline-link" data-go="ledger">
+                  Inspect the journal <span>→</span>
+                </button>
+              </div>
+            </div>
+            <div class="section-heading">
+              <h2>Your accounts <span id="account-count">3</span></h2>
+              <button class="inline-link" data-action="account">
+                Create an account <span>＋</span>
+              </button>
+            </div>
+            <div class="account-grid" id="overview-accounts"></div>
+            <div class="section-heading">
+              <h2>Recent activity</h2>
+              <button class="inline-link" data-go="ledger">
+                View all activity <span>→</span>
+              </button>
+            </div>
+            <div class="activity-panel" id="recent-activity"></div>
+            <div class="lab-callout">
+              <div class="lab-icon">↻</div>
+              <div>
+                <strong>What if the same payment arrives 32 times?</strong>
+                <p>
+                  Put retry protection and overdraft checks to the test in your
+                  own workspace.
+                </p>
+              </div>
+              <button class="button subtle" data-go="lab">
+                Open reliability lab <span>→</span>
+              </button>
+            </div>
+          </section>
+          <section
+            class="view"
+            id="view-accounts"
+            hidden
+            aria-labelledby="accounts-title"
+          >
+            <div class="page-heading">
+              <div>
+                <div class="eyebrow">A PLACE FOR EVERY PURPOSE</div>
+                <h1 id="accounts-title">Your accounts.</h1>
+                <p>
+                  Open an account, add demo funds, and move money between them.
+                </p>
+              </div>
+              <button class="button primary" data-action="account">
+                New account ＋
+              </button>
+            </div>
+            <div class="account-grid" id="all-accounts"></div>
+          </section>
+          <section
+            class="view"
+            id="view-ledger"
+            hidden
+            aria-labelledby="ledger-title"
+          >
+            <div class="page-heading">
+              <div>
+                <div class="eyebrow">FOLLOW THE MONEY</div>
+                <h1 id="ledger-title">Every entry, in the open.</h1>
+                <p>
+                  Select a movement to inspect its matching debit and credit.
+                </p>
+              </div>
+              <button class="button subtle" id="export-ledger">
+                Export journal ↓
+              </button>
+            </div>
+            <div class="ledger-summary" id="ledger-summary"></div>
+            <div class="ledger-toolbar">
+              <label class="search"
+                ><span>⌕</span
+                ><input
+                  id="ledger-search"
+                  type="search"
+                  placeholder="Search accounts or transfer IDs"
+                  aria-label="Search ledger" /></label
+              ><select id="ledger-filter" aria-label="Filter activity">
+                <option value="ALL">All movements</option>
+                <option value="TRANSFER">Transfers</option>
+                <option value="DEPOSIT">Demo deposits</option>
+              </select>
+            </div>
+            <div class="activity-panel" id="all-activity"></div>
+            <p class="table-note" id="ledger-count"></p>
+            <button class="button subtle" id="load-more" hidden>
+              Load more
+            </button>
+          </section>
+          <section
+            class="view"
+            id="view-lab"
+            hidden
+            aria-labelledby="lab-title"
+          >
+            <div class="page-heading">
+              <div>
+                <div class="eyebrow">BREAK THINGS. KEEP THE BALANCE.</div>
+                <h1 id="lab-title">The reliability lab.</h1>
+                <p>
+                  These experiments execute real operations in your browser
+                  workspace. They create dedicated test accounts so your other
+                  balances stay untouched.
+                </p>
+              </div>
+            </div>
+            <div class="lab-mode">
+              <span>LOCAL ENGINE</span>
+              <p>
+                IndexedDB transactions serialize browser writes, including
+                across tabs. This demonstrates the behavior; Java/PostgreSQL
+                concurrency is tested separately in the repository.
+              </p>
+            </div>
+            <div class="experiment-grid">
+              <article class="experiment">
+                <span class="experiment-number">EXPERIMENT 01</span>
+                <h2>32 retries. One charge.</h2>
+                <p>
+                  Submit 32 identical $25 transfers at once, using the same
+                  request key. The first posts; the rest return the exact same
+                  receipt.
+                </p>
+                <div class="experiment-expected">
+                  <span>EXPECTED</span
+                  ><strong>1 posted · 31 replays · $25 moved</strong>
+                </div>
+                <button class="button primary" id="retry-run">
+                  Run retry experiment <span>↻</span>
+                </button>
+                <div
+                  class="experiment-result"
+                  id="retry-result"
+                  role="status"
+                  aria-live="polite"
+                  hidden
+                ></div>
+              </article>
+              <article class="experiment">
+                <span class="experiment-number">EXPERIMENT 02</span>
+                <h2>40 requests. Limited funds.</h2>
+                <p>
+                  Give a test account $100, then request 40 separate $10
+                  transfers at once. The balance should never go below zero.
+                </p>
+                <div class="experiment-expected">
+                  <span>EXPECTED</span
+                  ><strong>10 posted · 30 rejected · $0 remaining</strong>
+                </div>
+                <button class="button primary" id="overdraft-run">
+                  Run overdraft experiment <span>↗</span>
+                </button>
+                <div
+                  class="experiment-result"
+                  id="overdraft-result"
+                  role="status"
+                  aria-live="polite"
+                  hidden
+                ></div>
+              </article>
+            </div>
+            <div class="lab-footnote">
+              <strong>Why this matters</strong>
+              <p>
+                A lost network response shouldn’t mean a duplicate charge. And
+                two payments can’t spend the same balance. Explore the Java
+                implementation for PostgreSQL row locks, durable idempotency,
+                and Kafka audit events.
+              </p>
+              <a
+                class="inline-link"
+                href="https://github.com/AyushB900/AetherCore/blob/main/docs/architecture.md"
+                target="_blank"
+                rel="noopener noreferrer"
+                >Read the engineering decisions ↗</a
+              >
+            </div>
+          </section>
+          <footer class="workspace-footer">
+            <span>AetherCore / Developer sandbox</span
+            ><span>USD only · No real payment rails</span>
+          </footer>
+        </div>
+      </main>
+    </div>
+    <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+    <dialog id="account-dialog" aria-labelledby="account-title">
+      <form id="account-form">
+        <div class="dialog-header">
+          <span class="eyebrow">GIVE YOUR MONEY A PURPOSE</span
+          ><button type="button" class="close" data-close aria-label="Close">
+            ×
+          </button>
+        </div>
+        <h2 id="account-title">Open a demo account.</h2>
+        <p>Start at $0.00. Add demo funds whenever you like.</p>
+        <label
+          >Account name<input
+            name="name"
+            required
+            maxlength="60"
+            placeholder="e.g. Equipment fund"
+            autocomplete="off"
+        /></label>
+        <div class="field-note">
+          Currency: USD · Up to 20 accounts per workspace
+        </div>
+        <div class="form-error" role="alert" hidden></div>
+        <button class="button primary full" type="submit">
+          Create account <span>＋</span>
+        </button>
+      </form>
+    </dialog>
+    <dialog id="transfer-dialog" aria-labelledby="transfer-title">
+      <form id="transfer-form">
+        <div class="dialog-header">
+          <span class="eyebrow">ONE MOVEMENT. TWO ENTRIES.</span
+          ><button type="button" class="close" data-close aria-label="Close">
+            ×
+          </button>
+        </div>
+        <h2 id="transfer-title">Move some money.</h2>
+        <p>Both sides post together, or nothing changes.</p>
+        <label for="transfer-source">From</label
+        ><select id="transfer-source" name="sourceId" required></select
+        ><label for="transfer-destination">To</label
+        ><select
+          id="transfer-destination"
+          name="destinationId"
+          required
+        ></select
+        ><label
+          >Amount in USD
+          <div class="amount-input">
+            <span>$</span
+            ><input
+              name="amount"
+              type="text"
+              inputmode="decimal"
+              required
+              placeholder="0.00"
+              autocomplete="off"
+            /></div
+        ></label>
+        <div class="field-note" id="available-balance"></div>
+        <div class="form-error" role="alert" hidden></div>
+        <button class="button primary full" type="submit">
+          Transfer demo funds <span>↗</span>
+        </button>
+        <div class="dialog-note">
+          Demo funds only. No external bank connection.
+        </div>
+      </form>
+    </dialog>
+    <dialog id="fund-dialog" aria-labelledby="fund-title">
+      <form id="fund-form">
+        <div class="dialog-header">
+          <span class="eyebrow">TOP UP YOUR SANDBOX</span
+          ><button type="button" class="close" data-close aria-label="Close">
+            ×
+          </button>
+        </div>
+        <h2 id="fund-title">Add demo funds.</h2>
+        <p>
+          A simulated deposit credits your account and debits the external
+          clearing account.
+        </p>
+        <label for="fund-destination">Destination account</label
+        ><select id="fund-destination" name="destinationId" required></select
+        ><label
+          >Amount in USD
+          <div class="amount-input">
+            <span>$</span
+            ><input
+              name="amount"
+              type="text"
+              inputmode="decimal"
+              required
+              placeholder="100.00"
+              autocomplete="off"
+            /></div
+        ></label>
+        <div class="field-note">
+          Up to $1,000,000 per deposit. No real money.
+        </div>
+        <div class="form-error" role="alert" hidden></div>
+        <button class="button primary full" type="submit">
+          Add demo funds <span>＋</span>
+        </button>
+      </form>
+    </dialog>
+    <dialog id="receipt-dialog" aria-labelledby="receipt-title">
+      <div class="dialog-header">
+        <span class="eyebrow">TRANSFER RECEIPT</span
+        ><button class="close" data-close aria-label="Close">×</button>
+      </div>
+      <div id="receipt-content"></div>
+    </dialog>
+    <dialog id="about-dialog" aria-labelledby="about-title">
+      <div class="dialog-header">
+        <span class="eyebrow">UNDERSTAND YOUR WORKSPACE</span
+        ><button class="close" data-close aria-label="Close">×</button>
+      </div>
+      <h2 id="about-title">Hands-on. On your device.</h2>
+      <p>
+        This is a working browser sandbox. Accounts, balances, request keys, and
+        journal entries are saved in IndexedDB on this device. Reloading the
+        page keeps your workspace; another browser starts its own.
+      </p>
+      <p>
+        It doesn’t call the Java API, PostgreSQL, Redis, or Kafka. The
+        repository contains that separate backend, with real-service integration
+        tests. GitHub Pages serves static websites and cannot run Java services.
+      </p>
+      <p>
+        Use fictional names. No signup, real money, or bank information is
+        needed. Clearing browser storage removes your demo data. Private
+        browsing may not retain it.
+      </p>
+      <a
+        class="button primary full"
+        href="https://github.com/AyushB900/AetherCore"
+        target="_blank"
+        rel="noopener noreferrer"
+        >Explore the Java backend ↗</a
+      >
+    </dialog>
+    <dialog id="reset-dialog" aria-labelledby="reset-title">
+      <div class="dialog-header">
+        <span class="eyebrow">START WITH A CLEAN SLATE</span
+        ><button class="close" data-close aria-label="Close">×</button>
+      </div>
+      <h2 id="reset-title">Reset this workspace?</h2>
+      <p>
+        This removes this browser’s demo accounts, transfers, and journal, then
+        restores the three starter accounts with $25,000 in demo funds. You can
+        export the journal first.
+      </p>
+      <div class="dialog-buttons">
+        <button class="button subtle" data-close>Keep exploring</button
+        ><button class="button danger" id="reset-confirm">
+          Reset demo data
+        </button>
+      </div>
+    </dialog>
+    <script type="module" src="app.js"></script>
+  </body>
+</html>

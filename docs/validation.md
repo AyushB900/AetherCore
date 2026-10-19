@@ -5,7 +5,7 @@ The following checks were executed in the cloud development environment with Jav
 | Check | Observed result |
 |---|---|
 | `./mvnw verify` with the cloud proxy/trust settings | 12 tests passed, 0 failed, 0 skipped; executable JAR built |
-| Portfolio Playwright tests using Chromium | 2 passed: desktop 1440px and mobile 390px |
+| Portfolio Playwright tests using Chromium | 16 passed: desktop 1440px and mobile 390px |
 | Actual HTTP retry demo | 32 identical requests: 1 created receipt, 31 replays, one $25 debit |
 | Actual HTTP overdraft demo | 40 requests for $10 with $75 available: 7 posted, 33 rejected |
 | Snapshot reconciliation after the demo | 0 drifted accounts, 0 unbalanced transfers, net balance 0 |
@@ -17,3 +17,9 @@ The following checks were executed in the cloud development environment with Jav
 The normal duplicate-request batch took 0.165 seconds in one local run; with both Redis and Kafka stopped it took 1.887 seconds. These timings describe only this small retry experiment, include connection/cache effects, and must not be represented as a transactions-per-second benchmark. PostgreSQL remained running throughout the outage experiment.
 
 The portfolio simulation runs entirely in the browser and is labeled as illustrative. Its browser tests verify that it displays one posting and 31 replays, can reset, handles the copy control, and fits both viewports without horizontal overflow. Backend guarantees are verified separately against real PostgreSQL 17, Redis 7.4, and Kafka 3.9.1 services.
+
+## Hands-on browser workspace
+
+The Pages demo is now a working local account workspace in `site/demo/`. Seven additional scenarios run at each viewport (14 checks), alongside the two original portfolio checks. Verified flows include creating/funding accounts, transferring exact cents, replaying the original receipt, preserving data after reload, rejecting overdrafts and excess decimal precision, searching/exporting/resetting, isolating different visitors, and rendering user-provided names as text.
+
+Both browser reliability experiments ran against committed IndexedDB transactions: 32 identical transfer requests produced one posting and 31 replays; 40 separate withdrawals against $100 produced ten $10 postings and 30 insufficient-funds failures. A separate two-tab test proved only one competing full-balance spend could commit. A fault-injection test proved a failed transaction did not retain a changed balance. These results describe the browser engine, not Java/PostgreSQL behavior; the backend tests above remain separate.
