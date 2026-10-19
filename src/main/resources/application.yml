@@ -1,0 +1,48 @@
+spring:
+  application:
+    name: aethercore
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/aethercore}
+    username: ${DB_USER:aethercore}
+    password: ${DB_PASSWORD}
+    hikari:
+      maximum-pool-size: 24
+      connection-init-sql: SET statement_timeout = '15s'
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      connect-timeout: 300ms
+      timeout: 300ms
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      acks: all
+      properties:
+        enable.idempotence: true
+        delivery.timeout.ms: 10000
+        request.timeout.ms: 5000
+        max.block.ms: 5000
+server:
+  port: ${PORT:8080}
+  error:
+    include-message: never
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: never
+  health:
+    redis:
+      enabled: false
+app:
+  api-key: ${AETHER_API_KEY}
+  redis-enabled: ${REDIS_ENABLED:true}
+  outbox-enabled: ${OUTBOX_ENABLED:true}
+  outbox-delay-ms: ${OUTBOX_DELAY_MS:1000}
+  settlement-topic: aethercore.settlements.v1

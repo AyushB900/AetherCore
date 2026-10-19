@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="AetherCore — a Java banking ledger exploring atomic transfers, double-entry accounting, concurrent spending, and reliable audit events.">
+  <meta name="theme-color" content="#102c2c">
+  <title>AetherCore — Every movement accounted for.</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+  <header class="nav wrap">
+    <a class="brand" href="#" aria-label="AetherCore home"><span class="brand-mark">A</span>AetherCore<span class="brand-dot">.</span></a>
+    <nav aria-label="Main navigation"><a href="#principles">The engineering</a><a href="#architecture">Architecture</a><a href="#demo">Interactive demo</a></nav>
+    <a class="source" href="https://github.com/AyushB900/AetherCore" target="_blank" rel="noopener noreferrer">View source <span aria-hidden="true">↗</span></a>
+  </header>
+  <main id="main">
+    <section class="hero wrap">
+      <div class="hero-copy">
+        <div class="eyebrow"><span></span> BANKING INFRASTRUCTURE / ENGINEERING PORTFOLIO</div>
+        <h1>Every movement.<br>Every entry.<br><em>Accounted for.</em></h1>
+        <p class="lede">Money moves fast. Correctness comes first. A transactional banking engine designed around the moments when requests race, networks fail, and retries happen.</p>
+        <div class="hero-actions"><a class="button primary" href="#demo">Explore the ledger <span aria-hidden="true">↗</span></a><a class="text-link" href="https://github.com/AyushB900/AetherCore#start-locally">Run it locally <span aria-hidden="true">→</span></a></div>
+        <div class="built-with"><span>BUILT WITH</span><strong>Java 21</strong><i>·</i><strong>Spring Boot</strong><i>·</i><strong>PostgreSQL</strong></div>
+      </div>
+      <div class="ledger-visual" aria-label="Illustration of a balanced transfer; sample values">
+        <div class="visual-top"><span class="tiny-dot"></span> LIVE LEDGER <span class="sample">ILLUSTRATIVE</span></div>
+        <div class="visual-heading"><span>Transfer overview</span><span class="posted">✓ Posted</span></div>
+        <div class="visual-amount">$2,500<span>.00</span><small>USD / INTERNAL TRANSFER</small></div>
+        <div class="account-flow"><div><span class="account-icon">↗</span><small>SOURCE ACCOUNT</small><strong>Operating account</strong><code>•••• 1042</code></div><span class="flow-line"><i></i></span><div><span class="account-icon">↙</span><small>DESTINATION</small><strong>Reserve account</strong><code>•••• 8091</code></div></div>
+        <div class="journal"><div class="journal-head"><span>JOURNAL ENTRY</span><span>AMOUNT</span></div><div><span><b class="entry-tag">DR</b> Operating liability</span><strong>− $2,500.00</strong></div><div><span><b class="entry-tag credit">CR</b> Reserve liability</span><strong>+ $2,500.00</strong></div></div>
+        <div class="balanced"><span>◉ Balanced by design</span><span>NET <b>$0.00</b></span></div>
+        <div class="visual-footer"><code>tx_a7c2…f901</code><span>One transaction. Two entries.</span></div>
+      </div>
+      <div class="hero-bottom"><span>01 — THE PROJECT</span><span>A study in financial systems that hold up under pressure.</span><span aria-hidden="true">↓</span></div>
+    </section>
+    <section class="principles" id="principles"><div class="wrap">
+      <div class="section-label">THE ENGINEERING</div>
+      <div class="section-heading"><h2>Built for the<br><em>unhappy path.</em></h2><p>A successful request is the easy part. The real work is preserving financial invariants when everything else is uncertain.</p></div>
+      <div class="cards">
+        <article><span class="card-number">01 / ATOMICITY</span><div class="card-symbol">⇄</div><h3>Both sides.<br>Or neither.</h3><p>A debit, a credit, a balance update, and an audit event share one PostgreSQL transaction. A failed step rolls back the entire movement.</p><span class="card-foot">ACID TRANSACTIONS</span></article>
+        <article><span class="card-number">02 / CONCURRENCY</span><div class="card-symbol">⌘</div><h3>A balance can’t<br>be spent twice.</h3><p>Ordered pessimistic row locks serialize competing transfers. Database constraints enforce nonnegative customer balances.</p><span class="card-foot">ROW-LEVEL LOCKING</span></article>
+        <article><span class="card-number">03 / IDEMPOTENCY</span><div class="card-symbol">↻</div><h3>Retry the request.<br>Not the charge.</h3><p>A durable request key returns the original receipt. Reusing a key with a changed payload is rejected, even after a cache expires.</p><span class="card-foot">DURABLE REQUEST KEYS</span></article>
+      </div>
+    </div></section>
+    <section class="architecture wrap" id="architecture">
+      <div class="section-label">UNDER THE HOOD</div><div class="section-heading"><h2>One source of truth.<br><em>A clear path to audit.</em></h2><p>PostgreSQL owns the money. Redis accelerates repeat requests. Kafka carries committed posting events through a transactional outbox.</p></div>
+      <div class="architecture-grid"><div class="system-map" aria-label="System architecture">
+        <div class="system-node client"><span>01</span><strong>Client request</strong><small>API key + idempotency key</small></div><div class="connector">↓</div>
+        <div class="system-node api"><span>02</span><strong>Spring Boot API</strong><small>Validation · locks · transaction</small></div>
+        <div class="branch"><div><div class="connector">↓ authoritative</div><div class="system-node database"><span>03</span><strong>PostgreSQL</strong><small>Journal + balances + outbox</small></div></div><div><div class="connector">↔ advisory</div><div class="system-node cache"><span>+</span><strong>Redis</strong><small>Leases + receipt hints</small></div></div></div>
+        <div class="connector">↓ outbox publisher</div><div class="system-node events"><span>04</span><strong>Apache Kafka</strong><small>At-least-once audit events</small></div>
+      </div><div class="architecture-notes"><article><span class="note-tag">DATABASE FIRST</span><h3>Correctness lives below the API.</h3><p>A deferred database constraint requires the exact debit and credit before commit. Journal records are immutable; corrections require a new transfer.</p></article><article><span class="note-tag">FAILURE AWARE</span><h3>A broker outage doesn’t lose the event.</h3><p>The event intent commits with the transfer. A publisher retries pending events, using stable event IDs so downstream consumers can deduplicate.</p></article><a class="text-link" href="https://github.com/AyushB900/AetherCore/blob/main/docs/architecture.md">Read the design decisions <span aria-hidden="true">↗</span></a></div></div>
+    </section>
+    <section class="demo-section" id="demo"><div class="wrap demo-grid"><div><div class="section-label">TRY THE FAILURE MODE</div><h2>32 requests.<br><em>One movement.</em></h2><p>What happens when the same transfer arrives 32 times? Run this browser simulation to see the intended idempotency behavior.</p><p class="demo-disclaimer">This is an illustrative client-side simulation, not a connection to the banking API. The repository’s tests and HTTP demo exercise the actual backend.</p><button class="button primary" id="run-demo" type="button">Simulate concurrent retries <span aria-hidden="true">↻</span></button><button class="reset" id="reset-demo" type="button" hidden>Reset</button></div>
+      <div class="demo-console"><div class="console-bar"><span><i></i><i></i><i></i></span><code>idempotency-demo</code><span>SIMULATION</span></div><div class="console-body"><div class="console-request"><span>POST</span> /api/v1/transfers<small>Idempotency-Key: portfolio-demo-001</small></div><div class="request-grid" id="request-grid" aria-label="32 request results"></div><div class="demo-stats"><div><strong id="committed">0</strong><span>COMMITTED</span></div><div><strong id="replayed">0</strong><span>SAFE REPLAYS</span></div><div><strong id="charged">$0</strong><span>TOTAL MOVED</span></div></div><p id="demo-status" role="status" aria-live="polite">Ready. One $25 transfer, 32 identical requests.</p></div></div>
+    </div></section>
+    <section class="evidence wrap"><div class="section-label">VERIFY, DON’T ASSUME</div><div class="section-heading"><h2>Claims you can<br><em>run yourself.</em></h2><p>No invented throughput figures. Real-service integration tests and a reproducible HTTP concurrency demo make the guarantees inspectable.</p></div>
+      <div class="test-list"><div><span>01</span><strong>Concurrent duplicate requests</strong><p>32 requests → one posting, 31 replays</p><code>POSTGRES + REDIS</code></div><div><span>02</span><strong>Competing withdrawals</strong><p>40 contenders → no customer overdraft</p><code>PESSIMISTIC LOCKS</code></div><div><span>03</span><strong>Atomic rollback</strong><p>Outbox insert failure → no money moved</p><code>FAULT INJECTION</code></div><div><span>04</span><strong>Audit event delivery</strong><p>Committed event → actual Kafka consumer</p><code>REAL BROKER</code></div></div>
+      <div class="terminal-command"><span>$</span><code>./mvnw verify</code><button id="copy-command" type="button" aria-label="Copy test command">Copy ↗</button></div>
+    </section>
+    <section class="about"><div class="wrap about-inner"><div><div class="section-label">BEHIND THE PROJECT</div><h2>Engineering for<br><em>trust, one invariant at a time.</em></h2></div><div><p>Built by <a href="https://github.com/AyushB900">AyushB900</a> to explore the infrastructure behind financial services: transaction boundaries, accounting integrity, concurrency, and reliable events.</p><p class="about-small">A portfolio implementation for learning and technical discussion. No real funds, external settlement, or production-compliance claims.</p><a class="button primary" href="https://github.com/AyushB900/AetherCore">Explore the repository <span aria-hidden="true">↗</span></a></div></div></section>
+  </main>
+  <footer class="wrap"><a class="brand" href="#"><span class="brand-mark">A</span>AetherCore.</a><span>BUILT WITH INTENT. VERIFIED WITH TESTS.</span><a href="https://github.com/AyushB900/AetherCore">GitHub ↗</a></footer>
+  <script src="app.js"></script>
+</body>
+</html>

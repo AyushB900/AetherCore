@@ -1,0 +1,22 @@
+const { test, expect } = require('@playwright/test');
+test('retry simulation moves money once, resets, and fits the viewport', async ({ page }) => {
+  const errors=[];
+  page.on('pageerror',error=>errors.push(error.message));
+  await page.goto('/');
+  await expect(page.getByRole('heading', { level: 1 })).toContainText('Accounted for.');
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.getByRole('button', { name: 'Simulate concurrent retries' }).click();
+  await expect(page.locator('#replayed')).toHaveText('31');
+  await expect(page.locator('#committed')).toHaveText('1');
+  await expect(page.locator('#charged')).toHaveText('$25');
+  await expect(page.locator('.request.committed')).toHaveCount(1);
+  await expect(page.locator('.request.replayed')).toHaveCount(31);
+  await expect(page.getByRole('status')).toContainText('(Simulation)');
+  await page.getByRole('button', { name: 'Reset', exact: true }).click();
+  await expect(page.locator('#committed')).toHaveText('0');
+  await expect(page.locator('#replayed')).toHaveText('0');
+  await expect(page.locator('#charged')).toHaveText('$0');
+  await page.getByRole('button', { name: 'Copy test command' }).click();
+  await expect(page.locator('#copy-command')).toHaveText(/Copied|Select:/);
+  expect(errors).toEqual([]);
+});

@@ -1,0 +1,7 @@
+.git
+target
+.env
+*.log
+site/node_modules
+site/test-results
+site/playwright-report
