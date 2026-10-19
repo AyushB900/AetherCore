@@ -10,6 +10,7 @@ The following checks were executed in the cloud development environment with Jav
 | Actual HTTP overdraft demo | 40 requests for $10 with $75 available: 7 posted, 33 rejected |
 | Snapshot reconciliation after the demo | 0 drifted accounts, 0 unbalanced transfers, net balance 0 |
 | Kafka outbox after normal operation | Pending events drained to 0 |
+| Multi-stage Docker build and Compose app startup | Image built with TLS verification; the HTTP concurrency demo also passed against the non-root application container |
 | Repeat HTTP demo while Redis and Kafka were stopped | Same money/replay results; 9 events remained pending |
 | Restart Redis and Kafka | Pending events drained back to 0, reconciliation remained clean |
 
