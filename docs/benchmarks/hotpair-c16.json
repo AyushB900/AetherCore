@@ -1,0 +1,40 @@
+{
+  "recorded_at_utc": "2026-10-19T03:58:42.761094+00:00",
+  "commit": "70addbf184c2fa882a6d1c49c15ddb6dd6972ada",
+  "working_tree_dirty": false,
+  "environment": {
+    "platform": "Linux-6.18.55-x86_64-with-glibc2.41",
+    "machine": "x86_64",
+    "available_cpus": 5,
+    "java_runtime": "openjdk version \"21.0.12.1\" 2026-08-18 LTS"
+  },
+  "workload": "Unique $1 transfers alternating across one hot account pair; HTTP includes connection setup; 32-request retry batch measured separately.",
+  "requests": 200,
+  "concurrency": 16,
+  "duration_seconds": 1.278,
+  "successful_requests_per_second": 156.49,
+  "latency_ms": {
+    "p50": 65.89,
+    "p95": 296.8,
+    "p99": 429.27
+  },
+  "http_errors": 0,
+  "retry_batch": {
+    "requests": 32,
+    "created": 1,
+    "replayed": 31,
+    "unique_receipts": 1
+  },
+  "reconciliation": {
+    "drifted_accounts": 0,
+    "drifted_holds": 0,
+    "unbalanced_transfers": 0,
+    "net_balance_minor": 0
+  },
+  "limitations": [
+    "Small development-host sample, not a capacity or production SLO claim.",
+    "One hot account pair; not a representative mixed banking workload.",
+    "No sustained soak, multi-region latency, or external settlement is measured.",
+    "Broker delivery latency is not included in transfer response latency."
+  ]
+}
